@@ -1,0 +1,20 @@
+version: '3.9'
+services:
+  postgres:
+    image: postgres:15
+    container_name: compass-bank-postgres
+    environment:
+      POSTGRES_DB: compass_bank
+      POSTGRES_USER: compass
+      POSTGRES_PASSWORD: compass
+    ports:
+      - 5432:5432
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U compass"]
+      interval: 10s
+      retries: 5
+      timeout: 5s
+volumes:
+  postgres_data:
