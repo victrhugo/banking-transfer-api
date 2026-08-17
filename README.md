@@ -1,122 +1,50 @@
-# Banking API
+# Banking Transfer API
 
-API REST para um banco digital simplificado, implementada em Java 21 com Spring Boot 3.
+A simplified digital banking REST API built with Java 21 and Spring Boot 3, focused on data consistency and correctness under concurrent access — the kind of problem real banking systems have to get right.
 
-## Descrição do projeto
+## Why this project exists
 
-Esta aplicação oferece gestão de contas, transferência de fundos e consulta de movimentações com foco em:
+Money transfer APIs are a classic concurrency trap: if two requests debit or credit the same account at nearly the same time, naive read-modify-write logic can lose an update or leave balances inconsistent. This project implements account management and fund transfers with that failure mode explicitly guarded against, rather than assumed away.
 
-- arquitetura em camadas
-- validações via Bean Validation
-- tratamento global de exceções
-- proteção contra condições de corrida em transferências
-- documentação Swagger/OpenAPI
-- testes unitários para regras de negócio
+## Key features
 
-## Tecnologias utilizadas
+- Account management and fund transfers between accounts
+- Transaction history queries
+- Race-condition protection on transfers via **pessimistic locking** (`PESSIMISTIC_WRITE`) on account records — a transfer acquires an exclusive lock on both the source and destination account rows before mutating balances, so concurrent transfers touching the same account serialize instead of racing
+- Centralized exception handling with consistent error responses
+- Automated tests (JUnit 5 + Mockito) and CI verification on every push and pull request via GitHub Actions
 
-- Java 21
-- Spring Boot 3
-- Maven
-- Spring Data JPA
-- PostgreSQL
-- JUnit 5
-- Mockito
-- Bean Validation
-- Lombok
-- Springdoc OpenAPI
+## Why pessimistic locking (and not optimistic)
 
-## Como executar
+Optimistic locking (version columns + retry-on-conflict) works well when contention is rare and clients can gracefully retry. For account balances, contention on a "hot" account can be frequent, and a failed transfer is a worse user experience than a slightly slower one. Pessimistic locking trades a bit of throughput for a strict guarantee: no transfer can read a balance that another in-flight transfer is about to change. Given the small scope of this API and the correctness-first goal, that trade-off made sense here.
 
-1. Inicie o banco de dados PostgreSQL:
+## Tech stack
+
+- Java 21, Spring Boot 3
+- Spring Data JPA, PostgreSQL, Flyway migrations
+- Bean Validation, Lombok
+- JUnit 5, Mockito
+- OpenAPI / Swagger UI
+- Docker Compose (local PostgreSQL)
+- GitHub Actions (CI on push/PR)
+
+## Architecture
+
+Layered design: controllers → services → repositories → DTOs, with exception handling centralized in a single layer rather than scattered across controllers.
+
+## Getting started
 
 ```bash
+# 1. start PostgreSQL
 docker compose up -d
-```
 
-2. Execute a aplicação:
-
-```bash
+# 2. run the application
 mvn clean spring-boot:run
 ```
 
-### Usando migrações (Flyway)
+The API runs at `http://localhost:8080`. Interactive API docs (Swagger UI) are available at `http://localhost:8080/swagger-ui.html`.
 
-O projeto usa Flyway para migrações de banco. O arquivo de migração inicial está em `src/main/resources/db/migration/V1__init.sql` e já inclui contas de exemplo.
-
-Ao subir o PostgreSQL via Docker Compose e iniciar a aplicação, o Flyway aplicará as migrations automaticamente.
-
-### Integração contínua
-
-Um workflow GitHub Actions (`.github/workflows/ci.yml`) roda `mvn clean verify` em pushes e PRs nas branches `main`/`master`.
-
-3. Acesse a API em:
-
-```
-http://localhost:8080
-```
-
-## Como subir PostgreSQL usando Docker
-
-O projeto inclui `docker-compose.yml` com configuração pronta:
-
-```bash
-docker compose up -d
-```
-
-Credenciais padrão:
-
-- banco: `compass_bank`
-- usuário: `compass`
-- senha: `compass`
-- porta: `5432`
-
-## Como acessar Swagger
-
-Após iniciar a aplicação, abra:
-
-```
-http://localhost:8080/swagger-ui.html
-```
-
-## Estrutura do projeto
-
-```
-src/main/java/com/compassuol/bank
-  ├── account
-  │   ├── controller
-  │   ├── dto
-  │   ├── entity
-  │   ├── repository
-  │   └── service
-  ├── transfer
-  │   ├── controller
-  │   ├── dto
-  │   ├── entity
-  │   ├── repository
-  │   └── service
-  ├── notification
-  │   └── service
-  └── common
-      ├── config
-      ├── exception
-      └── handler
-```
-
-## Decisões arquiteturais
-
-- camada de controller para entrada HTTP
-- camada de serviço para lógica de negócio
-- camada de repositório para acesso a dados
-- DTOs como contracts de API para evitar exposição de entidades
-- tratamento de exceções centralizado para respostas consistentes
-
-## Estratégia utilizada para concorrência
-
-A transferência utiliza `PESSIMISTIC_WRITE` no `AccountRepository` para bloquear registros de conta durante a operação.
-Isso evita condições de corrida em cenários de alta concorrência e garante que saldo não seja alterado simultaneamente por duas transações.
-
-## Como executar os testes
+## Running tests
 
 ```bash
 mvn test
